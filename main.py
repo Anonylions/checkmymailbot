@@ -13,19 +13,31 @@ EMAIL_PW = os.environ.get('EMAIL_PW')
 
 TG_TOKEN = os.environ.get('TG_CHECKMYMAILBOT_TOKEN')
 
-chats=[]
+chats=[] # for storing all active chat_id's
 
 updater = Updater(
     token=TG_TOKEN,
     use_context=True
 )
 
+# Reply Keyboard for start and stop buttons
 keyboard = [[KeyboardButton(text = "/start"), KeyboardButton(text = "/stop")]]
 options = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
 
 
 def run_checking(update, context):
 
+    """
+    Check a number of incoming emails for every 10 seconds
+    and notifies user about new messages if that number changed from last time
+
+    Parameters
+    ----------
+    update : 
+    context : 
+    """
+
+    # Welcome message
     context.bot.send_message(
         update.message.chat_id,
         parse_mode=ParseMode.HTML,
@@ -33,23 +45,28 @@ def run_checking(update, context):
         reply_markup=options
     )
 
-    last_number_msg = 0
-    cur_number_msg = 0
-            
+    last_number_msg = 0     # How many emails we got after last check
+    cur_number_msg = 0      # How many emails we got now
+    
+    # Initiate connection to a mail server
     with imaplib.IMAP4_SSL(
                 host='imap.yandex.ru',
                 port=993
         ) as M:
 
-        M.login(EMAIL_NAME, EMAIL_PW)
+        M.login(EMAIL_NAME, EMAIL_PW) # Authentification
 
         while True:
 
+            # If we don't have any active chats, then break out of a function 
             if str(update.message.chat_id) not in chats:
                 return
 
+            # Get a current number of incoming messages
             cur_number_msg = int(*M.select(mailbox='INBOX', readonly=True)[1])
 
+            # Works only one time, after start.
+            # We get and show number of unseen messages.
             if not(last_number_msg):
 
                 (_, messages) = M.search(None, '(UNSEEN)')
@@ -63,6 +80,8 @@ def run_checking(update, context):
 
                 last_number_msg = cur_number_msg
 
+            # If the number of incoming messages changed, 
+            # then send a notification (message)
             if cur_number_msg > last_number_msg:
 
                 context.bot.send_message(
@@ -73,16 +92,31 @@ def run_checking(update, context):
 
                 last_number_msg = cur_number_msg
 
+            # We check mail every 10 seconds
             time.sleep(10)
 
 
 def start(update, context):
 
+    """
+    Basic command. Works one time, after getting /start from user.
+
+    Parameters
+    ----------
+    update : 
+    context : 
+    """
+
+    # We start a new thread only if its id is not in active chats list
     if str(update.message.chat_id) not in chats:
+        
         new_thread = threading.Thread(target=run_checking, args=(update, context))
         new_thread.start()
-        chats.append(str(update.message.chat_id))
+
+        chats.append(str(update.message.chat_id)) # Add chat_id to active chats list
+
     else:
+        # Else we send a warning message
         context.bot.send_message(
             update.message.chat_id,
             parse_mode=ParseMode.HTML,
@@ -92,6 +126,16 @@ def start(update, context):
 
 def stop(update, context):
     
+    """
+    Stops thread and getting updates from a mail server.
+
+    Parameters
+    ----------
+    update : 
+    context : 
+    """
+
+    # It shouldn't work before the bot is running
     if chats == []:
 
         context.bot.send_message(
@@ -101,8 +145,10 @@ def stop(update, context):
         )
         return
 
+    # Remove chat_id from active chats list
     chats.remove(str(update.message.chat_id))
 
+    # And send a farewell message
     context.bot.send_message(
         update.message.chat_id,
         parse_mode=ParseMode.HTML,
