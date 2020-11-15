@@ -19,13 +19,17 @@ updater = Updater(
     token=TG_TOKEN,
     use_context=True
 )
+dispatcher = updater.dispatcher
+
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.INFO)
 
 # Reply Keyboard for start and stop buttons
 keyboard = [[KeyboardButton(text = "/start"), KeyboardButton(text = "/stop")]]
 options = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
 
 
-def run_checking(update, context):
+def run_checking(cur_chat_id):
 
     """
     Check a number of incoming emails for every 10 seconds
@@ -33,21 +37,12 @@ def run_checking(update, context):
 
     Parameters
     ----------
-    update : 
-    context : 
+    cur_chat_id : 
     """
-
-    # Welcome message
-    context.bot.send_message(
-        update.message.chat_id,
-        parse_mode=ParseMode.HTML,
-        text='Hi! I\'m Alex, your new email assistant. I\'ll notify you every time you get a new email.',
-        reply_markup=options
-    )
 
     last_number_msg = 0     # How many emails we got after last check
     cur_number_msg = 0      # How many emails we got now
-    
+
     # Initiate connection to a mail server
     with imaplib.IMAP4_SSL(
                 host='imap.yandex.ru',
@@ -59,7 +54,7 @@ def run_checking(update, context):
         while True:
 
             # If we don't have any active chats, then break out of a function 
-            if str(update.message.chat_id) not in chats:
+            if str(cur_chat_id) not in chats:
                 return
 
             # Get a current number of incoming messages
@@ -72,8 +67,8 @@ def run_checking(update, context):
                 (_, messages) = M.search(None, '(UNSEEN)')
                 unseen_number = len(messages[0].decode('utf-8').split())
 
-                context.bot.send_message(
-                    update.message.chat_id,
+                dispatcher.bot.send_message(
+                    chat_id=cur_chat_id,
                     parse_mode=ParseMode.HTML,
                     text=f'✉️ Now you have <b>{unseen_number}</b> unseen messages.'
                 )
@@ -84,8 +79,8 @@ def run_checking(update, context):
             # then send a notification (message)
             if cur_number_msg > last_number_msg:
 
-                context.bot.send_message(
-                    update.message.chat_id,
+                dispatcher.bot.send_message(
+                    chat_id=cur_chat_id,
                     parse_mode=ParseMode.HTML,
                     text=f'📩 New message!'
                 )
@@ -107,18 +102,32 @@ def start(update, context):
     context : 
     """
 
-    # We start a new thread only if its id is not in active chats list
-    if str(update.message.chat_id) not in chats:
-        
-        new_thread = threading.Thread(target=run_checking, args=(update, context))
-        new_thread.start()
+    # Chat id
+    cur_chat_id = update.message.chat_id
 
-        chats.append(str(update.message.chat_id)) # Add chat_id to active chats list
+    # We start a new thread only if its id is not in active chats list
+    if cur_chat_id not in chats:
+
+        # Add chat_id to active chats list
+        save_chat(str(cur_chat_id))
+
+        # Welcome message
+        dispatcher.bot.send_message(
+            chat_id=cur_chat_id,
+            parse_mode=ParseMode.HTML,
+            text="Hi! I'm Alex, your new email assistant. I'll notify you every time you get a new email.\n\n\
+<b>Be careful:</b> I'm falling asleep at 12am and waking up at 6am every day 😴 🛌",
+            reply_markup=options
+        )
+
+        # Create new thread
+        run_thread_for_chat(cur_chat_id)
+
 
     else:
         # Else we send a warning message
         context.bot.send_message(
-            update.message.chat_id,
+            chat_id=cur_chat_id,
             parse_mode=ParseMode.HTML,
             text=f'⛔️ Hey, don\'t mess with me, okay? I\'m already running.',
         )
@@ -155,15 +164,33 @@ def stop(update, context):
         text=f'I was glad to help you. Bye 👋',
     )
 
-    print(f'{threading.get_ident()} -- bye...')
+
+def run_thread_for_chat(chat_id):
+    new_thread = threading.Thread(target=run_checking, args=(chat_id, ))
+    new_thread.start()
+
+
+def save_chat(chat_id):
+
+    if chat_id not in chats:
+        
+        # write to global variable
+        chats.append(chat_id)
+        
+        # write to storage
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(dir_path, 'active_chats.storage')
+
+        with open(file_path, 'a') as active_chats:
+            active_chats.write(chat_id)
+            active_chats.write('\n')
+
+
+def remove_chat():
+    pass
 
 
 def main():
-
-    dispatcher = updater.dispatcher
-
-    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.INFO)
 
     startHandler = CommandHandler('start', start)
     stopHandler = CommandHandler('stop', stop)
@@ -171,7 +198,22 @@ def main():
     dispatcher.add_handler(startHandler)
     dispatcher.add_handler(stopHandler)
 
-    updater.start_polling()
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(dir_path, 'active_chats.storage')
+
+    updater.start_polling()    
+
+    with open(file_path, 'r') as active_chats:
+        lines = active_chats.readlines()
+
+        if lines != []:
+            for line in lines:
+                chats.append(line.strip())
+        
+        if chats != []:
+            for chat_id in chats:
+                run_thread_for_chat(chat_id)
+
     updater.idle()
 
 
