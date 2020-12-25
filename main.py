@@ -13,7 +13,7 @@ EMAIL_PW = os.environ.get('janeiro12')
 
 TG_TOKEN = os.environ.get('1427261843:AAFLLUBrvQSgIG1qnGxWPsJ9Rwi4loJ5c9I')
 
-chats=[640672725] # for storing all active chat_id's
+chats=[] # for storing all active chat_id's
 
 updater = Updater(
     token=TG_TOKEN,
