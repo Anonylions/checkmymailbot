@@ -8,12 +8,12 @@ from telegram.ext import Updater, CommandHandler
 from telegram import ParseMode, ReplyKeyboardMarkup, KeyboardButton
 
 
-EMAIL_NAME = os.environ.get('EMAIL_NAME')
-EMAIL_PW = os.environ.get('EMAIL_PW')
+EMAIL_NAME = os.environ.get('emvionubank@gmail.com')
+EMAIL_PW = os.environ.get('janeiro12')
 
-TG_TOKEN = os.environ.get('TG_CHECKMYMAILBOT_TOKEN')
+TG_TOKEN = os.environ.get('1427261843:AAFLLUBrvQSgIG1qnGxWPsJ9Rwi4loJ5c9I')
 
-chats=[] # for storing all active chat_id's
+chats=[640672725] # for storing all active chat_id's
 
 updater = Updater(
     token=TG_TOKEN,
@@ -45,7 +45,7 @@ def run_checking(cur_chat_id):
 
     # Initiate connection to a mail server
     with imaplib.IMAP4_SSL(
-                host='imap.yandex.ru',
+                host='imap.gmail.com',
                 port=993
         ) as M:
 
